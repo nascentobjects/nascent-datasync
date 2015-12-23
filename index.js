@@ -61,9 +61,19 @@ NascentDataSyncEventCharacteristic.prototype.onNotify = function() {
 };
 
 NascentDataSyncEventCharacteristic.prototype.sendNextChunk = function() {
+    var self = this;
+
     if (this.pendingWriteChunks.length === 0) {
         this.sendingChunks = false;
         console.log('nascent-datasync\tNo chunk to send');
+        return;
+    }
+
+    if (!this.updateValueCallback) {
+        console.log('No subscribers for data yet.  Waiting.');
+        setTimeout(function() {
+            self.sendNextChunk();
+        }, 100);
         return;
     }
 
@@ -137,10 +147,6 @@ NascentDataSync.prototype.sendEvent = function(eventName, args) {
         throw 'No event characteristic';
     }
     
-    if (!this.eventCharacteristic.updateValueCallback) {
-        throw 'No updateValueCallback';
-    }
-
     var json = JSON.stringify({
         c: eventName,
         a: args
