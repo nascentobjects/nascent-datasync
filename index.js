@@ -142,10 +142,10 @@ NascentDataSync.prototype.sendEvent = function(eventName, args) {
 
     var flag;
     for (var a=0; a<json.length; a+=19) {
-        if (a === 0) {
-            flag = NascentDataFlagChunkStart;
-        } else if (a+19 >= json.length) {
+        if (a+19 >= json.length) {
             flag = NascentDataFlagChunkEnd;
+        } else if (a === 0) {
+            flag = NascentDataFlagChunkStart;
         } else {
             flag = NascentDataFlagChunkMiddle;
         }
