@@ -13,6 +13,7 @@ var NascentDataSyncCommandCharacteristicUUID = 'c50dc35b-9a1b-40c2-bc97-96ee7254
 var NascentDataFlagChunkStart = 'S';
 var NascentDataFlagChunkEnd = 'E';
 var NascentDataFlagChunkMiddle = 'M';
+var NascentDataFlagChunkFull = 'F';
 
 
 function NascentDataSyncEventCharacteristic(dataSync) {
@@ -36,6 +37,12 @@ NascentDataSyncEventCharacteristic.prototype.onWriteRequest = function(data, off
             break;
         case NascentDataFlagChunkEnd:
             this.pendingData += '' + str.slice(1);
+            var cmd = JSON.parse('' + this.pendingData);
+            this.pendingData = '';
+            this.dataSync.emit(cmd.c, cmd.a);
+            break;
+        case NascentDataFlagChunkFull:
+            this.pendingData = '' + str.slice(1);
             var cmd = JSON.parse('' + this.pendingData);
             this.pendingData = '';
             this.dataSync.emit(cmd.c, cmd.a);
@@ -142,7 +149,9 @@ NascentDataSync.prototype.sendEvent = function(eventName, args) {
 
     var flag;
     for (var a=0; a<json.length; a+=19) {
-        if (a+19 >= json.length) {
+        if (a === 0 && a+19 >= json.length) {
+            flag = NascentDataFlagChunkFull;
+        } else if (a+19 >= json.length) {
             flag = NascentDataFlagChunkEnd;
         } else if (a === 0) {
             flag = NascentDataFlagChunkStart;

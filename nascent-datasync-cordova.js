@@ -10,6 +10,7 @@ function NascentDataSync(options) {
     this.DataFlagChunkStart = 'S';
     this.DataFlagChunkEnd = 'E';
     this.DataFlagChunkMiddle = 'M';
+    this.DataFlagChunkFull = 'F';
     this.NascentDataSyncCommandCharacteristicUUID = 'c50dc35b-9a1b-40c2-bc97-96ee7254579c';
     this.serviceUUID = '686c3dbf-2f84-4eb8-8e62-0c12fc534f7b';
     this.connectedAddress = null;
@@ -162,6 +163,11 @@ NascentDataSync.prototype.whenConnected = function(successCb, errCb) {
                         self.receivedEventData(self.pendingSubscribeData);
                         self.pendingSubscribeData = '';
                         break;
+                    case self.DataFlagChunkFull:
+                        self.pendingSubscribeData = v.slice(1);
+                        self.receivedEventData(self.pendingSubscribeData);
+                        self.pendingSubscribeData = '';
+                        break;
                 }
             }
         }, function(err) {
@@ -291,7 +297,9 @@ NascentDataSync.prototype.sendEvent = function(eventName, args) {
         var flag;
         var data;
         for (var a=0; a<json.length; a+=19) {
-            if (a+19 >= json.length) {
+            if (a === 0 && a+19 >= json.length) {
+                flag = self.DataFlagChunkFull;
+            } else if (a+19 >= json.length) {
                 flag = self.DataFlagChunkEnd;
             } else if (a === 0) {
                 flag = self.DataFlagChunkStart;
