@@ -279,8 +279,12 @@ NascentDataSync.prototype.whenConnected = function(successCb, errCb) {
 };
 
 NascentDataSync.prototype.receivedEventData = function(json) {
-    var obj = JSON.parse(json);
-    this.emit(obj.c, obj.a);
+    try {
+        var obj = JSON.parse(json);
+        this.emit(obj.c, obj.a);
+    } catch (e) {
+        console.log('nascent-datasync\tThrew out malformed json data packet');
+    }
 };
 
 NascentDataSync.prototype.sendEvent = function(eventName, args) {
