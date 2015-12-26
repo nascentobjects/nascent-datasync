@@ -2,6 +2,7 @@ var util = require('util');
 var EventEmitter = require('events').EventEmitter;
 var crypto = require('crypto');
 var bleno = require('bleno');
+var spawn = require('child_process').spawn;
 
 // on: 'event'
 // on: 'eventname'
@@ -70,7 +71,6 @@ NascentDataSyncEventCharacteristic.prototype.sendNextChunk = function() {
     }
 
     if (!this.updateValueCallback) {
-        console.log('No subscribers for data yet.  Waiting.');
         setTimeout(function() {
             self.sendNextChunk();
         }, 100);
@@ -88,88 +88,97 @@ function NascentDataSync(options) {
     if (!('id' in options)) {
         throw 'An id must be given';
     }
+    EventEmitter.call(this);
 
     this.serviceUUID = '686c3dbf2f844eb88e620c12fc534f7b';
     //this.serviceUUID = 'n' + crypto.createHash('md5').update(options.id).digest('hex');
-
-    EventEmitter.call(this);
-
     this.data = {};
-
     var self = this;
 
-    bleno.on('stateChange', function(state) {
-        if (state === 'poweredOn') {
-            bleno.startAdvertising('nascent', [self.serviceUUID]);
-        } else {
-            bleno.stopAdvertising();
-        }
+    setupBleno();
+    /*
+    var reset = spawn('hciconfig', [ 'hci0', 'reset' ]);
+    reset.on('close', function() {
+        setTimeout(setupBleno, 1000);
     });
+    */
 
-    bleno.on('advertisingStart', function(err) {
-        console.log('nascent-datasync\tAdvertising Start: ' + (err ? ('error=' + err) : 'success'));
+    function setupBleno() {
+        bleno.on('stateChange', function(state) {
+            if (state === 'poweredOn') {
+                bleno.startAdvertising('nascent', [self.serviceUUID]);
+            } else {
+                bleno.stopAdvertising();
+            }
+        });
 
-        if (err) {
-            return;
-        }
+        bleno.on('advertisingStart', function(err) {
+            console.log('nascent-datasync\tAdvertising Start: ' + (err ? ('error=' + err) : 'success'));
 
-        self.eventCharacteristic = new NascentDataSyncEventCharacteristic(self);
-        bleno.setServices([
-            new bleno.PrimaryService({
-                uuid: self.serviceUUID,
-                characteristics: [
-                    self.eventCharacteristic
-                ]
-            })
-        ]);
-    });
-    
-    bleno.on('advertisingStartError', function(err) {
-        console.log('nascent-datasync\tAdvertising Start Error: ' + JSON.stringify(err));
-    });
+            if (err) {
+                return;
+            }
 
-    bleno.on('advertisingStop', function() {
-        console.log('nascent-datasync\tAdvertising Stop');
-    });
+            self.eventCharacteristic = new NascentDataSyncEventCharacteristic(self);
+            bleno.setServices([
+                new bleno.PrimaryService({
+                    uuid: self.serviceUUID,
+                    characteristics: [
+                        self.eventCharacteristic
+                    ]
+                })
+            ]);
+        });
+        
+        bleno.on('advertisingStartError', function(err) {
+            console.log('nascent-datasync\tAdvertising Start Error: ' + JSON.stringify(err));
+        });
 
-    bleno.on('accept', function(clientAddress) {
-        console.log('nascent-datasync\tAccepting client address: ' + JSON.stringify(clientAddress));
-    });
+        bleno.on('advertisingStop', function() {
+            console.log('nascent-datasync\tAdvertising Stop');
+        });
 
-    bleno.on('disconnect', function(clientAddress) {
-        console.log('nascent-datasync\tDisconnecting client address: ' + JSON.stringify(clientAddress));
-    });
+        bleno.on('accept', function(clientAddress) {
+            console.log('nascent-datasync\tAccepting client address: ' + JSON.stringify(clientAddress));
+        });
+
+        bleno.on('disconnect', function(clientAddress) {
+            console.log('nascent-datasync\tDisconnecting client address: ' + JSON.stringify(clientAddress));
+        });
+    }
 }
 util.inherits(NascentDataSync, EventEmitter);
 
 NascentDataSync.prototype.sendEvent = function(eventName, args) {
-    if (!this.eventCharacteristic) {
-        throw 'No event characteristic';
-    }
-    
-    var json = JSON.stringify({
-        c: eventName,
-        a: args
-    });
+    function trySendEvent() {
+        if (!this.eventCharacteristic) {
+            setTimeout(trySendEvent, 500);
+            return;
+        }
+        var json = JSON.stringify({
+            c: eventName,
+            a: args
+        });
 
 
-    var flag;
-    for (var a=0; a<json.length; a+=19) {
-        if (a === 0 && a+19 >= json.length) {
-            flag = NascentDataFlagChunkFull;
-        } else if (a+19 >= json.length) {
-            flag = NascentDataFlagChunkEnd;
-        } else if (a === 0) {
-            flag = NascentDataFlagChunkStart;
-        } else {
-            flag = NascentDataFlagChunkMiddle;
+        var flag;
+        for (var a=0; a<json.length; a+=19) {
+            if (a === 0 && a+19 >= json.length) {
+                flag = NascentDataFlagChunkFull;
+            } else if (a+19 >= json.length) {
+                flag = NascentDataFlagChunkEnd;
+            } else if (a === 0) {
+                flag = NascentDataFlagChunkStart;
+            } else {
+                flag = NascentDataFlagChunkMiddle;
+            }
+
+            this.eventCharacteristic.pendingWriteChunks.push(new Buffer(flag + json.slice(a, a+19)));
         }
 
-        this.eventCharacteristic.pendingWriteChunks.push(new Buffer(flag + json.slice(a, a+19)));
-    }
-
-    if (!this.sendingChunks) {
-        this.eventCharacteristic.sendNextChunk();
+        if (!this.sendingChunks) {
+            this.eventCharacteristic.sendNextChunk();
+        }
     }
 };
 
