@@ -15,5 +15,10 @@
   "homepage": "https://bitbucket.org/nascentobjects/nascent-datasync#readme",
   "dependencies": {
     "bleno": "^0.3.3"
-  }
+  },
+  "readme": "ERROR: No README data found!",
+  "_id": "nascent-datasync@1.0.0",
+  "_shasum": "648790aad13f6bdc19ccc67210fe562764c1618e",
+  "_resolved": "git+https://bitbucket.org/nascentobjects/nascent-datasync.git#8085710e112a87dea12d75f410caef533e8ce074",
+  "_from": "git+https://bitbucket.org/nascentobjects/nascent-datasync.git"
 }

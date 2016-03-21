@@ -40,12 +40,18 @@ NascentDataSyncEventCharacteristic.prototype.onWriteRequest = function(data, off
             this.pendingData += '' + str.slice(1);
             var cmd = JSON.parse('' + this.pendingData);
             this.pendingData = '';
+            if (this.verbose) {
+                console.log('nascent-datasync\tEmitting Event: ' + cmd.c + ' ' + JSON.stringify(cmd.a));
+            }
             this.dataSync.emit(cmd.c, cmd.a);
             break;
         case NascentDataFlagChunkFull:
             this.pendingData = '' + str.slice(1);
             var cmd = JSON.parse('' + this.pendingData);
             this.pendingData = '';
+            if (this.verbose) {
+                console.log('nascent-datasync\tEmitting Event: ' + cmd.c + ' ' + JSON.stringify(cmd.a));
+            }
             this.dataSync.emit(cmd.c, cmd.a);
             break;
         case NascentDataFlagChunkMiddle:
@@ -57,8 +63,13 @@ NascentDataSyncEventCharacteristic.prototype.onWriteRequest = function(data, off
 };
 
 NascentDataSyncEventCharacteristic.prototype.onNotify = function() {
-    console.log('nascent-datasync\tOnNotify');
-    this.sendNextChunk();
+    if (this.verbose) {
+        console.log('nascent-datasync\tOnNotify');
+    }
+    var self = this;
+    setTimeout(function() {
+        self.sendNextChunk();
+    }, 50);
 };
 
 NascentDataSyncEventCharacteristic.prototype.sendNextChunk = function() {
@@ -66,7 +77,9 @@ NascentDataSyncEventCharacteristic.prototype.sendNextChunk = function() {
 
     if (this.pendingWriteChunks.length === 0) {
         this.sendingChunks = false;
-        console.log('nascent-datasync\tNo chunk to send');
+        if (this.verbose) {
+            console.log('nascent-datasync\tNo chunk to send');
+        }
         return;
     }
 
@@ -77,7 +90,9 @@ NascentDataSyncEventCharacteristic.prototype.sendNextChunk = function() {
         return;
     }
 
-    console.log('nascent-datasync\tSending Chunk Data: ' + this.pendingWriteChunks[0][0] + ' ' + this.pendingWriteChunks[0].length);
+    if (this.verbose) {
+        console.log('nascent-datasync\tSending Chunk Data: ' + this.pendingWriteChunks[0][0] + ' ' + this.pendingWriteChunks[0].length);
+    }
     this.sendingChunks = true;
     var data = this.pendingWriteChunks[0];
     this.pendingWriteChunks = this.pendingWriteChunks.slice(1);
@@ -89,8 +104,11 @@ function NascentDataSync(options) {
         throw 'An id must be given';
     }
     EventEmitter.call(this);
+    if (options.verbose) {
+        this.verbose = true;
+    }
 
-    this.serviceUUID = '686c3dbf2f844eb88e620c12fc534f7b';
+    this.serviceUUID = '686c3dbf2f844eb88e620c12fc534f7c';
     //this.serviceUUID = 'n' + crypto.createHash('md5').update(options.id).digest('hex');
     this.data = {};
     var self = this;
@@ -113,13 +131,16 @@ function NascentDataSync(options) {
         });
 
         bleno.on('advertisingStart', function(err) {
-            console.log('nascent-datasync\tAdvertising Start: ' + (err ? ('error=' + err) : 'success'));
+            if (self.verbose) {
+                console.log('nascent-datasync\tAdvertising Start: ' + (err ? ('error=' + err) : 'success'));
+            }
 
             if (err) {
                 return;
             }
 
             self.eventCharacteristic = new NascentDataSyncEventCharacteristic(self);
+            self.eventCharacteristic.verbose = self.verbose;
             bleno.setServices([
                 new bleno.PrimaryService({
                     uuid: self.serviceUUID,
@@ -131,27 +152,80 @@ function NascentDataSync(options) {
         });
         
         bleno.on('advertisingStartError', function(err) {
-            console.log('nascent-datasync\tAdvertising Start Error: ' + JSON.stringify(err));
+            if (self.verbose) {
+                console.log('nascent-datasync\tAdvertising Start Error: ' + JSON.stringify(err));
+            }
         });
 
         bleno.on('advertisingStop', function() {
-            console.log('nascent-datasync\tAdvertising Stop');
+            if (self.verbose) {
+                console.log('nascent-datasync\tAdvertising Stop');
+            }
         });
 
         bleno.on('accept', function(clientAddress) {
-            console.log('nascent-datasync\tAccepting client address: ' + JSON.stringify(clientAddress));
+            if (self.verbose) {
+                console.log('nascent-datasync\tAccepting client address: ' + JSON.stringify(clientAddress));
+            }
+            self.emit('connected');
         });
 
         bleno.on('disconnect', function(clientAddress) {
-            console.log('nascent-datasync\tDisconnecting client address: ' + JSON.stringify(clientAddress));
+            if (self.verbose) {
+                console.log('nascent-datasync\tDisconnecting client address: ' + JSON.stringify(clientAddress));
+            }
+            self.emit('disconnected');
         });
     }
 }
 util.inherits(NascentDataSync, EventEmitter);
 
+NascentDataSync.prototype.stop = function() {
+    bleno.stopAdvertising();
+};
+
+NascentDataSync.prototype.sendEventLowPriority = function(eventName, args) {
+    var self = this;
+
+    if (!self.eventCharacteristic) {
+        return;
+    }
+    if (!self.eventCharacteristic.updateValueCallback) {
+        return;
+    }
+
+    var json = JSON.stringify({
+        c: eventName,
+        a: args
+    });
+
+    if (self.verbose) {
+        console.log('nascent-datasync\tSending Event: ' + eventName + ' ' + JSON.stringify(args));
+    }
+    var flag;
+    for (var a=0; a<json.length; a+=19) {
+        if (a === 0 && a+19 >= json.length) {
+            flag = NascentDataFlagChunkFull;
+        } else if (a+19 >= json.length) {
+            flag = NascentDataFlagChunkEnd;
+        } else if (a === 0) {
+            flag = NascentDataFlagChunkStart;
+        } else {
+            flag = NascentDataFlagChunkMiddle;
+        }
+
+        self.eventCharacteristic.pendingWriteChunks.push(new Buffer(flag + json.slice(a, a+19)));
+    }
+
+    if (!self.eventCharacteristic.sendingChunks) {
+        self.eventCharacteristic.sendNextChunk();
+    }
+};
+
 NascentDataSync.prototype.sendEvent = function(eventName, args) {
+    var self = this;
     function trySendEvent() {
-        if (!this.eventCharacteristic) {
+        if (!self.eventCharacteristic) {
             setTimeout(trySendEvent, 500);
             return;
         }
@@ -160,7 +234,9 @@ NascentDataSync.prototype.sendEvent = function(eventName, args) {
             a: args
         });
 
-
+        if (self.verbose) {
+            console.log('nascent-datasync\tSending Event: ' + eventName + ' ' + JSON.stringify(args));
+        }
         var flag;
         for (var a=0; a<json.length; a+=19) {
             if (a === 0 && a+19 >= json.length) {
@@ -173,13 +249,14 @@ NascentDataSync.prototype.sendEvent = function(eventName, args) {
                 flag = NascentDataFlagChunkMiddle;
             }
 
-            this.eventCharacteristic.pendingWriteChunks.push(new Buffer(flag + json.slice(a, a+19)));
+            self.eventCharacteristic.pendingWriteChunks.push(new Buffer(flag + json.slice(a, a+19)));
         }
 
-        if (!this.sendingChunks) {
-            this.eventCharacteristic.sendNextChunk();
+        if (!self.eventCharacteristic.sendingChunks) {
+            self.eventCharacteristic.sendNextChunk();
         }
     }
+    trySendEvent();
 };
 
 NascentDataSync.updateData = function() {
