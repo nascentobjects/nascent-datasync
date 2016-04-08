@@ -124,7 +124,7 @@ function NascentDataSync(options) {
     function setupBleno() {
         bleno.on('stateChange', function(state) {
             if (state === 'poweredOn') {
-                bleno.startAdvertising('nascent', [self.serviceUUID]);
+                bleno.startAdvertising(options.id, [self.serviceUUID]);
             } else {
                 bleno.stopAdvertising();
             }
