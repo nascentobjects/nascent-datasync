@@ -1,0 +1,22 @@
+{
+  "name": "nascent-datasync",
+  "description": "cordova implementation of nascent datasync",
+  "main": "nascent-datasync-cordova.js",
+  "authors": [
+    "Andrew Robberts"
+  ],
+  "license": "",
+  "keywords": [
+    "nascent"
+  ],
+  "moduleType": [],
+  "homepage": "",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
