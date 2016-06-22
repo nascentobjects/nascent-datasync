@@ -11,7 +11,7 @@
     "url": "git+ssh://git@bitbucket.org/nascentobjects/nascent-datasync.git"
   },
   "author": "",
-  "license": "",
+  "license": "CLOSED",
   "homepage": "https://bitbucket.org/nascentobjects/nascent-datasync#readme",
   "dependencies": {
     "bleno": "^0.3.3"

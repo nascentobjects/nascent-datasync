@@ -1,3 +1,7 @@
+/*
+ * @author Andrew Robberts <andrew@nascentobjects.com>
+ * @copyright 2015-2016 Nascent Objects Inc. All rights reserved.
+ */
 var util = require('util');
 var EventEmitter = require('events').EventEmitter;
 var crypto = require('crypto');
@@ -124,7 +128,8 @@ function NascentDataSync(options) {
     function setupBleno() {
         bleno.on('stateChange', function(state) {
             if (state === 'poweredOn') {
-                bleno.startAdvertising(options.id, [self.serviceUUID]);
+                var deviceName = process.env.BLENO_DEVICE_NAME || os.hostname();
+                bleno.startAdvertising(deviceName, [self.serviceUUID]);
             } else {
                 bleno.stopAdvertising();
             }
